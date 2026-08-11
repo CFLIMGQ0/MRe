@@ -31,7 +31,11 @@ def load_pc_cmka_config(path: str | Path, experiment: str) -> dict[str, Any]:
     experiments = {item["name"]: item for item in raw["experiments"]}
     staged = {item["name"]: item for item in raw.get("staged_experiments", [])}
     controls = {item["name"]: item for item in raw.get("controls", [])}
-    available = {**controls, **staged, **experiments}
+    bernoulli_kan = {
+        item["name"]: item
+        for item in raw.get("bernoulli_kan_experiments", [])
+    }
+    available = {**controls, **staged, **experiments, **bernoulli_kan}
     if experiment not in available:
         raise ValueError(
             f"unknown PC-CMKA experiment {experiment!r}; "
@@ -41,7 +45,12 @@ def load_pc_cmka_config(path: str | Path, experiment: str) -> dict[str, Any]:
     config = {
         key: value
         for key, value in raw.items()
-        if key not in {"experiments", "staged_experiments", "controls"}
+        if key not in {
+            "experiments",
+            "staged_experiments",
+            "controls",
+            "bernoulli_kan_experiments",
+        }
     }
     config = deep_update(config, selected.get("overrides", {}))
     config["experiment_name"] = experiment

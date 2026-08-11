@@ -73,9 +73,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--include-controls", action="store_true")
     parser.add_argument(
         "--suite",
-        choices=("word", "staged", "controls", "all"),
+        choices=("word", "staged", "controls", "bernoulli_kan", "all"),
         default="word",
-        help="Word Table 5, prompt-staged, classical controls, or every suite.",
+        help=(
+            "Word Table 5, prompt-staged, classical controls, the ten "
+            "Bernoulli-KAN ideas, or every suite."
+        ),
     )
     parser.add_argument("--dry-run", action="store_true")
     return parser.parse_args()
@@ -88,6 +91,8 @@ def available(config_path: Path, suite: str, include_controls: bool) -> list[dic
         entries.extend(raw["experiments"])
     if suite in {"staged", "all"}:
         entries.extend(raw.get("staged_experiments", []))
+    if suite in {"bernoulli_kan", "all"}:
+        entries.extend(raw.get("bernoulli_kan_experiments", []))
     if suite in {"controls", "all"} or include_controls:
         entries = list(raw.get("controls", [])) + entries
     return entries

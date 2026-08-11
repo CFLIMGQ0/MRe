@@ -13,6 +13,7 @@ genomics:
   graph_structure: pc_cmka_full_graph   # 可选: none, fixed_fold_graph, reference_operator, patient_degree_edge_gate, reference_degree_edge_gate, direct_edge_gate, direct_low_rank, inverse_calibration, inverse_fixed_rho, inverse_random_probe, bernoulli_views, effective_resistance_views, independent_views, isotropic_antithetic, hessian_antithetic, pc_cmka_full_graph
   encoder: dd_kac                       # 可选: mlp, gcn, gat, kan, dd_kac, pb_tamlu, do_la, jc_moa, tc_rbf_kan
   pathway_aggregation: none             # 可选: none, gcn, gat, kan
+  bernoulli_kan_innovation: none        # 可选: none, bv_jetkan, uvr_kan, mask2spline_hyperkan, kan2bern_controller, bml_kan, bernoulli_jensen_debiased, overlap_calibrated_jacobian, bernoulli_barycentric_grid, stable_cross_pathway_gate, sensitivity_correlated_views
 
 fusion:
   enabled: true                         # 可选: true, false（仅在病理和基因组均开启时生效）

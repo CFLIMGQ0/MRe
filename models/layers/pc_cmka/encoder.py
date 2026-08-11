@@ -10,6 +10,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from .augmentation import GraphViewAugmenter
+from .bernoulli_kan import BernoulliKANInnovation
 from .calibration import CalibrationResult, ChebyshevInverseCalibrator
 from .losses import (
     cosine_variance_consistency,
@@ -55,6 +56,9 @@ class PCCMKADDKACPathway(nn.Module):
             config["identifiability"].get("random_probes", 1)
         )
         self.loss_weights = dict(config["loss"])
+        self.bernoulli_kan_mode = str(
+            config.get("bernoulli_kan", {}).get("mode", "off")
+        )
 
         self.value_linear = nn.Parameter(torch.tensor(1.0))
         self.value_coefficients = nn.Parameter(torch.zeros(8))
@@ -74,6 +78,7 @@ class PCCMKADDKACPathway(nn.Module):
         self.auxiliary_loss = torch.tensor(0.0)
         self.loss_components: dict[str, torch.Tensor] = {}
         self.diagnostics: dict[str, Any] = {}
+        self.runtime_views: dict[str, torch.Tensor] = {}
 
     def _probe(self, inputs: torch.Tensor) -> torch.Tensor:
         if self.probe_mode == "functional":
@@ -202,6 +207,10 @@ class PCCMKADDKACPathway(nn.Module):
         negative_route = base_route
         positive_gate = base_gate
         negative_gate = base_gate
+        positive_fusion = fused
+        negative_fusion = fused
+        intersection_fusion = fused
+        union_fusion = fused
         if self.training and str(self.augmenter.settings.get("mode", "off")) != "off":
             positive_stats = self._graph_stats(inputs, views.positive)
             negative_stats = self._graph_stats(inputs, views.negative)
@@ -229,6 +238,61 @@ class PCCMKADDKACPathway(nn.Module):
                 positive_fusion, negative_fusion
             )
             ssl_gate = gate_consistency(positive_gate, negative_gate)
+
+            if self.bernoulli_kan_mode == "bml_kan":
+                positive_mask = (views.positive_delta > -0.999).to(inputs.dtype)
+                negative_mask = (views.negative_delta > -0.999).to(inputs.dtype)
+                intersection_mask = positive_mask * negative_mask
+                union_mask = torch.maximum(positive_mask, negative_mask)
+                keep = float(self.augmenter.settings.get("bernoulli_keep", 0.8))
+                intersection_probability = max(keep * keep, 1e-3)
+                union_probability = max(1.0 - (1.0 - keep) ** 2, 1e-3)
+                intersection_weights = (
+                    calibration.weights * intersection_mask / intersection_probability
+                ).clamp_min(1e-8)
+                union_weights = (
+                    calibration.weights * union_mask / union_probability
+                ).clamp_min(1e-8)
+                intersection_stats = self._graph_stats(
+                    inputs, intersection_weights
+                )
+                union_stats = self._graph_stats(inputs, union_weights)
+                intersection_structure, _ = self._structure_branch(
+                    inputs, intersection_weights, base_logits
+                )
+                union_structure, _ = self._structure_branch(
+                    inputs, union_weights, base_logits
+                )
+                intersection_fusion, _ = self._fuse(
+                    value, intersection_structure, inputs, intersection_stats
+                )
+                union_fusion, _ = self._fuse(
+                    value, union_structure, inputs, union_stats
+                )
+
+        positive_mask = (views.positive_delta > -0.999).to(inputs.dtype)
+        negative_mask = (views.negative_delta > -0.999).to(inputs.dtype)
+        intersection_count = (positive_mask * negative_mask).sum(dim=1)
+        union_count = torch.maximum(positive_mask, negative_mask).sum(dim=1)
+        overlap = intersection_count / union_count.clamp_min(1.0)
+        self.runtime_views = {
+            "base": fused,
+            "positive": positive_fusion,
+            "negative": negative_fusion,
+            "intersection": intersection_fusion,
+            "union": union_fusion,
+            "overlap": overlap,
+            "mask_summary": torch.stack(
+                (
+                    positive_mask.mean(dim=1),
+                    negative_mask.mean(dim=1),
+                    overlap,
+                    views.positive_delta.abs().mean(dim=1),
+                    (views.positive_delta - views.negative_delta).abs().mean(dim=1),
+                ),
+                dim=1,
+            ),
+        }
 
         if self.ssl_mode == "off":
             ssl = inputs.new_zeros(())
@@ -305,6 +369,10 @@ class PCCMKADDKACPathway(nn.Module):
             "loss_ssl": components["ssl"].detach(),
             "loss_identifiability": components["identifiability"].detach(),
             "loss_dictionary": components["dictionary"].detach(),
+            "controller_sensitivity": self.augmenter.feedback_sensitivity.detach(),
+            "controller_updates": calibration.rho.new_tensor(
+                self.augmenter.feedback_updates
+            ),
         }
         return fused
 
@@ -330,6 +398,18 @@ class PCCMKADDKACEncoder(nn.Module):
             )
             for index, (size, graph) in enumerate(zip(input_dims, gene_graphs))
         )
+        innovation_mode = str(
+            config.get("bernoulli_kan", {}).get("mode", "off")
+        )
+        self.bernoulli_kan = (
+            None
+            if innovation_mode == "off"
+            else BernoulliKANInnovation(
+                embedding_dim=output_dim,
+                num_pathways=6,
+                config=deepcopy(config),
+            )
+        )
         self.auxiliary_loss = torch.tensor(0.0)
         self.loss_components: dict[str, torch.Tensor] = {}
         self.diagnostics: dict[str, Any] = {}
@@ -339,6 +419,36 @@ class PCCMKADDKACEncoder(nn.Module):
             raise ValueError("six pathway tensors are required")
         outputs = [module(values) for module, values in zip(self.pathways, pathways)]
         stacked = torch.stack(outputs, dim=1)
+        if self.bernoulli_kan is not None:
+            positive = torch.stack(
+                [module.runtime_views["positive"] for module in self.pathways],
+                dim=1,
+            )
+            negative = torch.stack(
+                [module.runtime_views["negative"] for module in self.pathways],
+                dim=1,
+            )
+            metadata = {
+                "intersection": torch.stack(
+                    [module.runtime_views["intersection"] for module in self.pathways],
+                    dim=1,
+                ),
+                "union": torch.stack(
+                    [module.runtime_views["union"] for module in self.pathways],
+                    dim=1,
+                ),
+                "overlap": torch.stack(
+                    [module.runtime_views["overlap"] for module in self.pathways],
+                    dim=1,
+                ),
+                "mask_summary": torch.stack(
+                    [module.runtime_views["mask_summary"] for module in self.pathways],
+                    dim=1,
+                ).mean(dim=1),
+            }
+            stacked = self.bernoulli_kan(
+                stacked, positive, negative, metadata
+            )
         names = ("moment", "trust", "ssl", "identifiability", "dictionary")
         self.loss_components = {
             name: torch.stack([module.loss_components[name] for module in self.pathways]).mean()
@@ -347,6 +457,13 @@ class PCCMKADDKACEncoder(nn.Module):
         self.auxiliary_loss = torch.stack(
             [module.auxiliary_loss for module in self.pathways]
         ).mean()
+        if self.bernoulli_kan is not None:
+            self.loss_components["bernoulli_kan"] = (
+                self.bernoulli_kan.auxiliary_loss
+            )
+            self.auxiliary_loss = (
+                self.auxiliary_loss + self.bernoulli_kan.auxiliary_loss
+            )
         self.diagnostics = {
             f"group_{index}": module.diagnostics
             for index, module in enumerate(self.pathways)
@@ -354,4 +471,9 @@ class PCCMKADDKACEncoder(nn.Module):
         self.diagnostics["loss_components"] = {
             name: value.detach() for name, value in self.loss_components.items()
         }
+        if self.bernoulli_kan is not None:
+            self.diagnostics["bernoulli_kan"] = {
+                "mode": self.bernoulli_kan.mode,
+                **self.bernoulli_kan.diagnostics,
+            }
         return stacked

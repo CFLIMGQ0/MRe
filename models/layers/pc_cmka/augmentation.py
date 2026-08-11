@@ -44,6 +44,65 @@ class GraphViewAugmenter(nn.Module):
         else:
             probabilities = torch.empty(0, dtype=operator.prior_weights.dtype)
         self.register_buffer("effective_resistance_probabilities", probabilities)
+        self.register_buffer(
+            "feedback_sensitivity", torch.zeros_like(operator.prior_weights)
+        )
+        self.feedback_updates = 0
+
+    def _feedback_probabilities(
+        self, base_probability: float, reverse: bool = False
+    ) -> torch.Tensor:
+        sensitivity = self.feedback_sensitivity
+        if self.feedback_updates == 0:
+            return torch.full_like(sensitivity, base_probability)
+        normalized = sensitivity / sensitivity.max().clamp_min(1e-8)
+        centered = normalized - normalized.mean()
+        direction = -1.0 if reverse else 1.0
+        beta = float(self.settings.get("controller_beta", 0.2))
+        minimum = float(self.settings.get("minimum_probability", 0.25))
+        return (base_probability + direction * beta * centered).clamp(
+            minimum, 0.995
+        )
+
+    def _capture_feedback(
+        self, tensor: torch.Tensor, base: torch.Tensor
+    ) -> torch.Tensor:
+        """Capture the real downstream gradient for the next forward step."""
+
+        if not tensor.requires_grad:
+            tensor = tensor.detach().requires_grad_(True)
+
+        def update(gradient: torch.Tensor) -> torch.Tensor:
+            with torch.no_grad():
+                score = (gradient.detach().abs() * base.detach()).mean(dim=0)
+                score = score / score.max().clamp_min(1e-8)
+                ema = float(self.settings.get("controller_ema", 0.9))
+                self.feedback_sensitivity.mul_(ema).add_(
+                    score, alpha=1.0 - ema
+                )
+                self.feedback_updates += 1
+            return gradient
+
+        tensor.register_hook(update)
+        return tensor
+
+    @staticmethod
+    def _correlated_masks(
+        probability: torch.Tensor,
+        sensitivity: torch.Tensor,
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        """Sample a Bernoulli pair with exact marginals and signed dependence."""
+
+        uniform = torch.rand_like(probability)
+        shared_first = uniform < probability
+        shared_second = shared_first
+        antithetic_first = uniform < probability
+        antithetic_second = (1.0 - uniform) < probability
+        normalized = sensitivity / sensitivity.max().clamp_min(1e-8)
+        selector = torch.rand_like(probability) < normalized
+        first = torch.where(selector, shared_first, antithetic_first)
+        second = torch.where(selector, shared_second, antithetic_second)
+        return first.to(probability.dtype), second.to(probability.dtype)
 
     def _moment_jacobian(
         self,
@@ -211,18 +270,51 @@ class GraphViewAugmenter(nn.Module):
             negative_delta = self._edge_direction(second)
             hessian = torch.ones_like(calibration.coefficients)
             antithetic = False
-        elif mode in {"bernoulli", "effective_resistance"}:
+        elif mode in {
+            "bernoulli",
+            "effective_resistance",
+            "kan_guided_bernoulli",
+            "correlated_bernoulli",
+        }:
             if mode == "effective_resistance":
                 probability = self._effective_resistance_probabilities()
+                positive_probability = negative_probability = probability
+            elif mode == "kan_guided_bernoulli":
+                keep = float(self.settings.get("bernoulli_keep", 0.8))
+                positive_probability = self._feedback_probabilities(keep)
+                negative_probability = self._feedback_probabilities(
+                    keep, reverse=True
+                )
+            elif mode == "correlated_bernoulli":
+                keep = float(self.settings.get("bernoulli_keep", 0.8))
+                probability = self._feedback_probabilities(keep)
+                positive_probability = negative_probability = probability
             else:
                 keep = float(self.settings.get("bernoulli_keep", 0.8))
                 probability = torch.full_like(self.operator.prior_weights, keep)
-            probability = probability.unsqueeze(0).expand_as(base)
-            positive = base * torch.bernoulli(probability) / probability.clamp_min(1e-6)
-            negative = base * torch.bernoulli(probability) / probability.clamp_min(1e-6)
+                positive_probability = negative_probability = probability
+            positive_probability = positive_probability.unsqueeze(0).expand_as(base)
+            negative_probability = negative_probability.unsqueeze(0).expand_as(base)
+            if mode == "correlated_bernoulli":
+                sensitivity = self.feedback_sensitivity.unsqueeze(0).expand_as(base)
+                positive_mask, negative_mask = self._correlated_masks(
+                    positive_probability, sensitivity
+                )
+            else:
+                positive_mask = torch.bernoulli(positive_probability)
+                negative_mask = torch.bernoulli(negative_probability)
+            positive = (
+                base * positive_mask / positive_probability.clamp_min(1e-6)
+            )
+            negative = (
+                base * negative_mask / negative_probability.clamp_min(1e-6)
+            )
+            if mode in {"kan_guided_bernoulli", "correlated_bernoulli"}:
+                positive = self._capture_feedback(positive, base)
+                negative = self._capture_feedback(negative, base)
             positive_delta = positive / base.clamp_min(1e-8) - 1.0
             negative_delta = negative / base.clamp_min(1e-8) - 1.0
-            hessian = probability
+            hessian = 0.5 * (positive_probability + negative_probability)
             antithetic = False
         else:
             raise ValueError(f"unknown augmentation mode: {mode}")

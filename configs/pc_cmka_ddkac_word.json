@@ -45,7 +45,9 @@
     "shared_route": true,
     "train_only": true,
     "bernoulli_keep": 0.8,
-    "minimum_probability": 0.25
+    "minimum_probability": 0.25,
+    "controller_beta": 0.2,
+    "controller_ema": 0.9
   },
   "ssl": {
     "mode": "structure_fusion_gate"
@@ -64,6 +66,24 @@
     "lambda_structure": 1.0,
     "lambda_fusion": 0.5,
     "lambda_gate": 0.1
+  },
+  "bernoulli_kan": {
+    "mode": "off",
+    "dropout": 0.25,
+    "grid_size": 5,
+    "coarse_grid": 3,
+    "fine_grid": 7,
+    "adapter_rank": 4,
+    "tau": 1.0,
+    "ema": 0.95,
+    "gate_temperature": 0.1,
+    "jensen_epsilon": 0.05,
+    "controller_gradient_scale": 1.0,
+    "lambda_view": 0.01,
+    "lambda_jacobian": 0.001,
+    "lambda_anchor": 0.01,
+    "lambda_adapter": 0.0001,
+    "lambda_lattice": 0.01
   },
   "experiments": [
     {
@@ -239,6 +259,68 @@
       "source_label": "main-control-4",
       "question": "普通Bernoulli双视图与成熟一致性损失基线",
       "overrides": {"calibration_mode": "fixed", "augmentation": {"mode": "bernoulli", "krylov_enabled": false}, "ssl": {"mode": "structure_fusion"}, "identifiability": {"mode": "off"}}
+    }
+  ],
+  "bernoulli_kan_experiments": [
+    {
+      "name": "BK_I01_bv_jetkan",
+      "source_label": "Bernoulli-KAN-I01",
+      "question": "双视图KAN输出与投影Jacobian一致性",
+      "overrides": {"calibration_mode": "fixed", "augmentation": {"mode": "bernoulli", "krylov_enabled": false, "shared_route": true}, "ssl": {"mode": "structure_fusion"}, "identifiability": {"mode": "off"}, "loss": {"lambda_id": 0.0}, "bernoulli_kan": {"mode": "bv_jetkan"}}
+    },
+    {
+      "name": "BK_I02_uvr_kan",
+      "source_label": "Bernoulli-KAN-I02",
+      "question": "视图不确定性控制粗细KAN分辨率",
+      "overrides": {"calibration_mode": "fixed", "augmentation": {"mode": "bernoulli", "krylov_enabled": false, "shared_route": true}, "ssl": {"mode": "structure_fusion"}, "identifiability": {"mode": "off"}, "loss": {"lambda_id": 0.0}, "bernoulli_kan": {"mode": "uvr_kan"}}
+    },
+    {
+      "name": "BK_I03_mask2spline_hyperkan",
+      "source_label": "Bernoulli-KAN-I03",
+      "question": "mask结构摘要条件化低秩KAN样条系数",
+      "overrides": {"calibration_mode": "fixed", "augmentation": {"mode": "bernoulli", "krylov_enabled": false, "shared_route": true}, "ssl": {"mode": "structure_fusion"}, "identifiability": {"mode": "off"}, "loss": {"lambda_id": 0.0}, "bernoulli_kan": {"mode": "mask2spline_hyperkan"}}
+    },
+    {
+      "name": "BK_I04_kan2bern_controller",
+      "source_label": "Bernoulli-KAN-I04",
+      "question": "生存梯度反馈的KAN敏感度safe/hard删边控制器",
+      "overrides": {"calibration_mode": "fixed", "augmentation": {"mode": "kan_guided_bernoulli", "krylov_enabled": false, "shared_route": true}, "ssl": {"mode": "structure_fusion"}, "identifiability": {"mode": "off"}, "loss": {"lambda_id": 0.0}, "bernoulli_kan": {"mode": "kan2bern_controller"}}
+    },
+    {
+      "name": "BK_I05_bml_kan",
+      "source_label": "Bernoulli-KAN-I05",
+      "question": "Bernoulli mask交并格与KAN非加性估值残差",
+      "overrides": {"calibration_mode": "fixed", "augmentation": {"mode": "bernoulli", "krylov_enabled": false, "shared_route": true}, "ssl": {"mode": "structure_fusion"}, "identifiability": {"mode": "off"}, "loss": {"lambda_id": 0.0}, "bernoulli_kan": {"mode": "bml_kan"}}
+    },
+    {
+      "name": "BK_I06_bernoulli_jensen_debiased",
+      "source_label": "Bernoulli-KAN-I06",
+      "question": "双视图方差与KAN局部曲率的Jensen偏差校正",
+      "overrides": {"calibration_mode": "fixed", "augmentation": {"mode": "bernoulli", "krylov_enabled": false, "shared_route": true}, "ssl": {"mode": "structure_fusion"}, "identifiability": {"mode": "off"}, "loss": {"lambda_id": 0.0}, "bernoulli_kan": {"mode": "bernoulli_jensen_debiased"}}
+    },
+    {
+      "name": "BK_I07_overlap_calibrated_jacobian",
+      "source_label": "Bernoulli-KAN-I07",
+      "question": "mask重合率校准的KAN投影Jacobian一致性",
+      "overrides": {"calibration_mode": "fixed", "augmentation": {"mode": "bernoulli", "krylov_enabled": false, "shared_route": true}, "ssl": {"mode": "structure_fusion"}, "identifiability": {"mode": "off"}, "loss": {"lambda_id": 0.0}, "bernoulli_kan": {"mode": "overlap_calibrated_jacobian"}}
+    },
+    {
+      "name": "BK_I08_bernoulli_barycentric_grid",
+      "source_label": "Bernoulli-KAN-I08",
+      "question": "完整图与双视图Wasserstein分位重心KAN网格",
+      "overrides": {"calibration_mode": "fixed", "augmentation": {"mode": "bernoulli", "krylov_enabled": false, "shared_route": true}, "ssl": {"mode": "structure_fusion"}, "identifiability": {"mode": "off"}, "loss": {"lambda_id": 0.0}, "bernoulli_kan": {"mode": "bernoulli_barycentric_grid"}}
+    },
+    {
+      "name": "BK_I09_stable_cross_pathway_gate",
+      "source_label": "Bernoulli-KAN-I09",
+      "question": "双视图稳定性控制逐条跨通路KAN样条边",
+      "overrides": {"calibration_mode": "fixed", "augmentation": {"mode": "bernoulli", "krylov_enabled": false, "shared_route": true}, "ssl": {"mode": "structure_fusion"}, "identifiability": {"mode": "off"}, "loss": {"lambda_id": 0.0}, "bernoulli_kan": {"mode": "stable_cross_pathway_gate"}}
+    },
+    {
+      "name": "BK_I10_sensitivity_correlated_views",
+      "source_label": "Bernoulli-KAN-I10",
+      "question": "KAN敏感度条件化的联合相关Bernoulli双视图",
+      "overrides": {"calibration_mode": "fixed", "augmentation": {"mode": "correlated_bernoulli", "krylov_enabled": false, "shared_route": true}, "ssl": {"mode": "structure_fusion"}, "identifiability": {"mode": "off"}, "loss": {"lambda_id": 0.0}, "bernoulli_kan": {"mode": "sensitivity_correlated_views"}}
     }
   ]
 }
