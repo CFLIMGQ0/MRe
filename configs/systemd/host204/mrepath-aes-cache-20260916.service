@@ -1,0 +1,17 @@
+[Unit]
+Description=Requested full-cohort AES p0.8 T0.001 CPU cache queue
+After=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/xmlg/Lim/Project1
+ExecStart=/xmlg/Lim/Project1/.venvs/repository_baselines_20260913/bin/python -u /xmlg/Lim/Project1/scripts/run_aes_cache_scheduler.py --state-dir /xmlg/Lim/Project1/results/requested_full_20260916/scheduler --poll-seconds 30 --local-slots 1 --local-min-free-gib 80 --remote-min-free-gib 60 --max-attempts 12 --retry-base-seconds 60 --retry-max-seconds 21600
+Environment=PYTHONDONTWRITEBYTECODE=1
+Environment=LD_LIBRARY_PATH=/xmlg/Lim/conda/envs/myenv/lib
+KillMode=control-group
+TimeoutStopSec=30
+Restart=on-failure
+RestartSec=60
+
+[Install]
+WantedBy=default.target

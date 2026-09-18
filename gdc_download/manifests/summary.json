@@ -1,0 +1,32 @@
+{
+  "blca": {
+    "fixed_fold_cases": 384,
+    "dx_cases": 384,
+    "files": 455,
+    "bytes": 713189146748
+  },
+  "brca": {
+    "fixed_fold_cases": 1062,
+    "dx_cases": 1062,
+    "files": 1133,
+    "bytes": 1158795315120
+  },
+  "coadread": {
+    "fixed_fold_cases": 297,
+    "dx_cases": 297,
+    "files": 301,
+    "bytes": 209060297804
+  },
+  "hnsc": {
+    "fixed_fold_cases": 394,
+    "dx_cases": 394,
+    "files": 415,
+    "bytes": 405422472946
+  },
+  "stad": {
+    "fixed_fold_cases": 317,
+    "dx_cases": 317,
+    "files": 341,
+    "bytes": 310724385341
+  }
+}

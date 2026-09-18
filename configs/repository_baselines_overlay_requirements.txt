@@ -1,0 +1,16 @@
+# Compatibility overlay for the existing Python 3.12 / Torch 2.12 runtime.
+# NOT the original paper environment. Do not install into an active training venv.
+setuptools==80.9.0
+numpy==1.26.4
+scipy==1.17.1
+scikit-learn==1.6.1
+scikit-survival==0.24.1
+osqp==0.6.7.post3
+qdldl==0.1.9.post1
+tensorboardX==2.6.2.2
+shap==0.48.0
+faiss-cpu==1.15.0
+numba==0.67.0
+llvmlite==0.49.0
+cloudpickle==3.1.2
+slicer==0.0.8

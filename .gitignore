@@ -1,0 +1,88 @@
+# Python caches and test artifacts
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+
+# Local environments and editor settings
+.venv/
+venv/
+env/
+.conda/
+.vscode/
+.idea/
+
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+credentials*
+secrets*
+
+# Datasets, WSI files, extracted features, and downloads
+/data/
+/datasets_csv/
+/splits/
+*.svs
+*.tif
+*.tiff
+*.ndpi
+*.mrxs
+*.h5
+*.hdf5
+*.partial
+
+# Model weights and experiment outputs
+/logs/
+/results*/
+/checkpoints/
+/weights/
+/runs/
+/wandb/
+*.pt
+*.pth
+*.ckpt
+*.safetensors
+*.onnx
+*.log
+
+# Locally downloaded third-party repositories and tools
+/third_party/
+/tools/
+
+# Local papers and operating-system metadata
+/*.pdf
+.DS_Store
+Thumbs.db
+*:Zone.Identifier
+# Python virtual environments
+.venvs/
+.venv/
+venv/
+env/
+
+# Python cache
+__pycache__/
+*.py[cod]
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+.venvs/
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+.vscode/
+.idea/
+.DS_Store

@@ -1,0 +1,9 @@
+[Unit]
+Description=Supplement live baseline folds on 204; two project jobs per GPU
+
+[Service]
+Type=simple
+WorkingDirectory=/xmlg/Lim/Project1
+Environment=LD_LIBRARY_PATH=/xmlg/Lim/conda/envs/myenv/lib
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStart=/xmlg/Lim/Project1/.venvs/mrepath_20260913/bin/python -u scripts/run_pibd_survpath_5fold.py --models survpath --cohorts blca hnsc --results-root /xmlg/Lim/Project1/results/results_requested_baselines_5fold_20260913 --queue-name queue_204_double --gpus 0 1 2 3 --reserve-manifest /xmlg/Lim/Project1/gdc_download/manifests/brca_split_20260913/host204_data/tcga_brca_fixed_folds_dx.tsv --reserve-raw /xmlg/Lim/MRePath_GDC/raw_svs/tcga_brca --min-free-gib 70 --allow-gpu-sharing --min-gpu-free-mib 10000 --max-jobs-per-gpu 2 --shared-queue-status /xmlg/Lim/Project1/results/results_requested_baselines_5fold_20260913/queue_204/pipeline_status.json --leave-existing-training

@@ -1,0 +1,17 @@
+[Unit]
+Description=Requested LD-CVAE DIMAF SlotSPE M3 AES dynamic six-GPU queue
+After=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/xmlg/Lim/Project1
+ExecStart=/xmlg/Lim/Project1/.venvs/repository_baselines_20260913/bin/python -u /xmlg/Lim/Project1/scripts/run_requested_six_gpu_scheduler.py --state-dir /xmlg/Lim/Project1/results/requested_full_20260916/scheduler --local-results /xmlg/Lim/Project1/results/requested_full_20260916 --remote-results /home/Lim/MRePath_runs/requested_full_20260916 --min-free-mib 18000 --min-disk-free-gib 60 --poll-seconds 20 --max-attempts 12 --retry-base-seconds 60 --retry-max-seconds 21600
+Environment=PYTHONDONTWRITEBYTECODE=1
+Environment=LD_LIBRARY_PATH=/xmlg/Lim/conda/envs/myenv/lib
+KillMode=control-group
+TimeoutStopSec=30
+Restart=on-failure
+RestartSec=60
+
+[Install]
+WantedBy=default.target

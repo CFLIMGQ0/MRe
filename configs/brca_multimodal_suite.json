@@ -1,0 +1,22 @@
+{
+  "study": "tcga_brca",
+  "endpoint": "DSS",
+  "folds": 5,
+  "seed": 1,
+  "epochs": 30,
+  "patch_size": 256,
+  "magnification": "20x",
+  "pathology_encoder": "imagenet_resnet50_truncated",
+  "pathology_feature_dim": 1024,
+  "max_patches": 4096,
+  "models": [
+    "SNN+CLAM",
+    "Porpoise",
+    "MCAT",
+    "MOTCat",
+    "CMTA",
+    "SurvPath",
+    "PIBD",
+    "MRePath"
+  ]
+}

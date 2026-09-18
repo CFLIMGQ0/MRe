@@ -1,0 +1,212 @@
+import argparse
+
+def _process_args():
+    r"""
+    Function creates a namespace to read terminal-based arguments for running the experiment
+
+    Args
+        - None 
+
+    Return:
+        - args : argparse.Namespace
+
+    """
+
+    parser = argparse.ArgumentParser(description='Configurations for SurvPath Survival Prediction Training')
+
+    #---> study related
+    parser.add_argument('--study', type=str, help='study name')
+    parser.add_argument('--task', type=str, choices=['survival'])
+    parser.add_argument('--n_classes', type=int, default=4, help='number of classes (4 bins for survival)')
+    parser.add_argument('--results_dir', default='./results', help='results directory (default: ./results)')
+    parser.add_argument("--type_of_path", type=str, default="hallmarks", choices=["xena", "hallmarks", "combine"])
+    parser.add_argument('--testing', action='store_true', default=False, help='debugging tool')
+
+    #----> data related
+    parser.add_argument('--data_root_dir', type=str, default=None, help='data directory')
+    parser.add_argument('--label_file', type=str, default=None, help='Path to csv with labels')
+    parser.add_argument('--omics_dir', type=str, default=None, help='Path to dir with omics csv for all modalities')
+    parser.add_argument('--num_patches', type=int, default=4000, help='number of patches')
+    parser.add_argument('--label_col', type=str, default="survival_months_dss", help='type of survival (OS, DSS, PFI)')
+    parser.add_argument("--wsi_projection_dim", type=int, default=1)
+    parser.add_argument("--encoding_layer_1_dim", type=int, default=8)
+    parser.add_argument("--encoding_layer_2_dim", type=int, default=16)
+    parser.add_argument("--encoder_dropout", type=float, default=0.25)
+
+    #----> split related 
+    parser.add_argument('--k', type=int, default=5, help='number of folds (default: 10)')
+    parser.add_argument('--k_start', type=int, default=-1, help='start fold (default: -1, last fold)')
+    parser.add_argument('--k_end', type=int, default=-1, help='end fold (default: -1, first fold)')
+    parser.add_argument('--split_dir', type=str, default=None, help='manually specify the set of splits to use, ' 
+                    +'instead of infering from the task and label_frac argument (default: None)')
+    parser.add_argument('--which_splits', type=str, default="10foldcv", help='where are splits')
+        
+    #----> training related 
+    parser.add_argument('--max_epochs', type=int, default=20, help='maximum number of epochs to train (default: 200)')
+    parser.add_argument('--lr', type=float, default=1e-4, help='learning rate (default: 0.0001)')
+    parser.add_argument('--seed', type=int, default=1, help='random seed for reproducible experiment (default: 1)')
+    parser.add_argument('--opt', type=str, default="adam", help="Optimizer")
+    parser.add_argument('--reg_type', type=str, default="None", help="regularization type [None, L1, L2]")
+    parser.add_argument('--weighted_sample', action='store_true', default=False, help='enable weighted sampling')
+    parser.add_argument(
+        '--random_val_patches',
+        action='store_true',
+        default=False,
+        help='randomly sample validation WSI bags like the released loader',
+    )
+    parser.add_argument(
+        '--mrepath_hypergraph_cache_dir',
+        type=str,
+        default=None,
+        help=(
+            'Optional persistent topology/feature incidence cache directory '
+            'for HGNN and SHGNN.'
+        ),
+    )
+    parser.add_argument('--batch_size', type=int, default=1, help='batch_size')
+    parser.add_argument('--num_workers', type=int, default=0,
+                        help='data loader workers; use 0 for stable WSL/NTFS graph loading')
+    parser.add_argument('--bag_loss', type=str, choices=['ce_surv', "nll_surv", "nll_rank_surv", "rank_surv", "cox_surv"], default='ce',
+                        help='survival loss function (default: ce)')
+    parser.add_argument('--alpha_surv', type=float, default=0.0, help='weight given to uncensored patients')
+    parser.add_argument('--reg', type=float, default=1e-5, help='weight decay / L2 (default: 1e-5)')
+    parser.add_argument('--lr_scheduler', type=str, default='cosine')
+    parser.add_argument('--warmup_epochs', type=int, default=1)
+    parser.add_argument(
+        '--checkpoint_selection',
+        type=str,
+        choices=['final', 'best'],
+        default='best',
+        help='evaluate the final epoch or reload the best validation C-index checkpoint',
+    )
+
+    #---> model related
+    parser.add_argument('--fusion', type=str, default=None)
+    parser.add_argument('--modality', type=str, default="wsi")
+    parser.add_argument('--encoding_dim', type=int, default=768, help='WSI encoding dim')
+    parser.add_argument('--use_nystrom', action='store_true', default=False, help='Use Nystrom attentin in SurvPath.')
+    parser.add_argument(
+        '--mrepath_graph_type',
+        choices=['mlp', 'gat', 'gcn', 'hgnn', 'shgnn'],
+        default='shgnn',
+        help='Pathology aggregator used by the MRePath hypergraph ablation.',
+    )
+    parser.add_argument(
+        '--mrepath_hyperedges',
+        choices=['none', 'topology', 'feature', 'both'],
+        default='both',
+        help='Hyperedge family used by HGNN/SHGNN.',
+    )
+    parser.add_argument(
+        '--mrepath_weighting',
+        choices=['dynamic', 'fixed'],
+        default='dynamic',
+        help='Dynamic paper weighting or a fixed pathology/genomics pair.',
+    )
+    parser.add_argument('--mrepath_path_weight', type=float, default=0.5)
+    parser.add_argument('--mrepath_gene_weight', type=float, default=0.5)
+    parser.add_argument(
+        '--mrepath_fusion',
+        choices=['ifa', 'pg_gp', 'sa_pg', 'sa_gp'],
+        default='ifa',
+        help='Interactive-alignment fusion variant from the paper ablation.',
+    )
+    parser.add_argument(
+        '--mrepath_gene_aggregation',
+        choices=['default', 'gcn', 'gat', 'kan'],
+        default='default',
+        help=(
+            'Six-signature genomic aggregation variant; default/gcn/gat are '
+            'paper variants and kan is an experimental extension.'
+        ),
+    )
+    parser.add_argument(
+        '--mrepath_genomic_encoder',
+        choices=[
+            'original', 'pb_tamlu', 'do_la', 'jc_moa',
+            'tc_rbf_kan', 'dd_kac', 'pc_cmka_ddkac',
+        ],
+        default='original',
+        help='Pathway-wise genomic encoder; improved variants preserve six tokens.',
+    )
+    parser.add_argument(
+        '--pc_cmka_config',
+        type=str,
+        default='configs/pc_cmka_ddkac_word.json',
+        help='Word-aligned PC-CMKA-DDKAC JSON configuration.',
+    )
+    parser.add_argument(
+        '--pc_cmka_experiment',
+        type=str,
+        default='A0_full',
+        help='Experiment name from the PC-CMKA configuration.',
+    )
+    parser.add_argument(
+        '--fold_survival_bins',
+        action='store_true',
+        default=False,
+        help='Fit survival discretization bins from each training fold only.',
+    )
+    parser.add_argument(
+        '--mrepath_rebalance_variant',
+        choices=['original', 'quality', 'conflict', 'quality_conflict'],
+        default='original',
+        help='Original equations or the quality/conflict-aware extension.',
+    )
+    parser.add_argument(
+        '--mrepath_modality_dropout',
+        type=float,
+        default=0.0,
+        help='Training probability of dropping pathology or genomics.',
+    )
+    parser.add_argument(
+        '--mrepath_monotonicity_weight',
+        type=float,
+        default=0.0,
+        help='Weight of the reliability monotonicity constraint.',
+    )
+    parser.add_argument(
+        '--mrepath_monotonicity_margin',
+        type=float,
+        default=0.02,
+    )
+    parser.add_argument(
+        '--mrepath_unimodal_loss_weight',
+        type=float,
+        default=0.0,
+        help='Weight of auxiliary pathology/genomics survival heads.',
+    )
+    parser.add_argument(
+        '--mrepath_mismatch_loss_weight',
+        type=float,
+        default=0.0,
+        help='Weight of the paired-vs-mismatched conflict objective.',
+    )
+    parser.add_argument(
+        '--mrepath_encoder',
+        choices=['resnet50', 'uni', 'conch', 'phikon2', 'ctranspath'],
+        default='resnet50',
+        help='Bookkeeping label for the pathology feature encoder ablation.',
+    )
+
+    args = parser.parse_args()
+
+    if not (args.task == "survival"):
+        print("Task and folder does not match")
+        exit()
+    if args.mrepath_weighting == 'fixed':
+        if args.mrepath_path_weight < 0 or args.mrepath_gene_weight < 0:
+            parser.error('fixed modality weights must be non-negative')
+        if abs(args.mrepath_path_weight + args.mrepath_gene_weight - 1.0) > 1e-8:
+            parser.error('fixed pathology and gene weights must sum to 1')
+    if not 0.0 <= args.mrepath_modality_dropout < 1.0:
+        parser.error('mrepath modality dropout must be in [0, 1)')
+    if min(
+        args.mrepath_monotonicity_weight,
+        args.mrepath_monotonicity_margin,
+        args.mrepath_unimodal_loss_weight,
+        args.mrepath_mismatch_loss_weight,
+    ) < 0:
+        parser.error('MRePath auxiliary loss values must be non-negative')
+
+    return args

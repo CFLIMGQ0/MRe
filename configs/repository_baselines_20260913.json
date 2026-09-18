@@ -1,0 +1,38 @@
+{
+  "protocol": "official-native; no project split/feature substitution",
+  "models": {
+    "ld_cvae": {
+      "url": "https://github.com/JJ-ZHOU-Code/RobustMultiModel",
+      "directory": "third_party/LD_CVAE_20260913",
+      "commit": "df8c50d94179a63edf3d9017641295a268ce9148",
+      "entrypoint": "main.py",
+      "packaged_cohorts": ["blca", "brca", "gbmlgg", "luad", "ucec"],
+      "compatibility_changes": ["models/model_ldvae.py: prior tensors follow input/model device; no equation/loss change", "models/model_transformer.py: two query tokens follow input device instead of hardcoded CUDA; no encoder computation change"],
+      "feature_note": "Repository accepts a named extractor and dimension; CLI default 768. Must verify extractor provenance before training.",
+      "endpoint": "survival_months + censorship (do not silently relabel as DSS)",
+      "evaluation_note": "CLI default missing_rate=1.0; use explicit 0.0 for full modalities"
+    },
+    "dimaf": {
+      "url": "https://github.com/Trustworthy-AI-UU-NKI/DIMAF",
+      "directory": "third_party/DIMAF_20260913",
+      "commit": "286dae63fcdc65de38224981cf345845d25c57be",
+      "entrypoint": "src/main_survival.py",
+      "packaged_cohorts": ["blca", "brca", "kirc", "luad"],
+      "compatibility_changes": [],
+      "feature_note": "UNI 1024, 256px at 0.5um/px; train-only per-fold clustering, 16 PANTHER prototypes, then 16x1025 probability+mean input",
+      "endpoint": "dss_survival_days",
+      "evaluation_note": "Cox + distance correlation (weights 1 and 7), native site-stratified folds"
+    },
+    "slotspe": {
+      "url": "https://github.com/zylvemvet/SlotSPE",
+      "directory": "third_party/SlotSPE_20260913",
+      "commit": "02051a2083add7b427727e0200e4263516903561",
+      "entrypoint": "survival.py",
+      "packaged_cohorts": ["blca", "brca", "coadread", "hnsc", "kirc", "luad", "lusc", "skcm", "stad", "ucec"],
+      "compatibility_changes": [],
+      "feature_note": "Official example uses UNI 1024, 4096 patches; combine signatures and external native RNA tables",
+      "endpoint": "survival_months_dss",
+      "evaluation_note": "CLI defaults full modalities; official cluster example passes --omic_missing"
+    }
+  }
+}
